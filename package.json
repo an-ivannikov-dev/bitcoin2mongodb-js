@@ -20,6 +20,7 @@
   "dependencies": {
     "@log4js-node/gelf": "^1.0.2",
     "bignumber.js": "^9.0.0",
+    "bitcoin-rpc-js": "https://github.com/an-ivannikov-dev/bitcoin-rpc-js.git",
     "bitcoind-rpc": "^0.8.1",
     "bitcoinjs-lib": "^5.1.7",
     "bluebird": "^3.7.2",
