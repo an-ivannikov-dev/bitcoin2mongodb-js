@@ -1,0 +1,90 @@
+version: "3"
+
+services:
+
+  mongodb:
+    image: mongo
+    hostname: mongodb
+    ports:
+      - "27017:27017"
+    expose:
+      - "27017"
+    #environment:
+      #MONGO_INITDB_ROOT_USERNAME: "root"
+      #MONGO_INITDB_ROOT_PASSWORD: "rootpassword"
+    volumes:
+      #- "mongodb_volume:/data"
+      - "../data/mongodb:/data"
+
+  bitcoin_node:
+    build:
+      context: ../../bitcoin-node
+      dockerfile: ./Dockerfile
+    #image: ivannikovdev/bitcoin-node
+    hostname: bitcoin_node
+    ports:
+      # mainnet <port, rpcport>
+      - "8333:8333"
+      - "8332:8332"
+      # testnet
+      - "18333:18333"
+      - "18332:18332"
+      # regtest
+      - "18444:18444"
+      - "18443:18443"
+      # zmq
+      - "28332:28332"
+    expose:
+      # mainnet
+      - "8333"
+      - "8332"
+      # testnet
+      - "18333"
+      - "18332"
+      # regtest
+      - "18444"
+      - "18443"
+      # zmq
+      - "28332"
+    volumes:
+      #- "bitcoin_node_volume:/data"
+      - "../data/bitcoin_node:/data"
+      - "../bitcoin.conf:/data/bitcoin.conf"
+
+  bitcoin2mongodb:
+    command: /app/bin/bitcoin2mongodb
+    depends_on:
+      - mongodb
+      - bitcoin_node
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile
+    #image: ivannikovdev/bitcoin2mongodb
+    hostname: bitcoin2mongodb
+    environment:
+      ENV: "production"
+      NODE_ENV: "production"
+      DATA_DIR: "/data"
+      BITCOIN_RPC_PROTOCOL: "http"
+      BITCOIN_RPC_HOST: "bitcoin_node"
+      # main: 8333, test: 18333, regtest: 18443
+      BITCOIN_RPC_PORT: 18443
+      BITCOIN_RPC_PATHNAME: "/"
+      BITCOIN_RPC_USER: "rpcuser"
+      BITCOIN_RPC_PASSWORD: "rpcpassword"
+      BITCOIN_ZMQ_ADDRESS: "bitcoin_node:28332"
+      MONGODB_URI: "mongodb://mongodb:27017/BTC"
+      MONGODB_DEBUG: "true"
+      MONGODB_WIPE: "true"
+      MONGODB_BLOCK_START: 0
+    volumes:
+      #- "bitcoin2mongodb_volume:/data"
+      - "../data/bitcoin2mongodb:/data"
+
+#volumes:
+#  mongodb_volume:
+#    external: true
+#  bitcoin_node_volume:
+#    external: true
+#  bitcoin2mongodb_volume:
+#    external: true

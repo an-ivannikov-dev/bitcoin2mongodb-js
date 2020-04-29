@@ -1,0 +1,57 @@
+{
+  "name": "bitcoin2mongodb-node",
+  "version": "0.1.0",
+  "private": true,
+  "description": "bitcoin2mongodb for node.js",
+  "author": {
+    "name": "Aleksandr Ivannikov",
+    "email": "dev@an-ivannikov.com",
+    "url": "https://an-ivannikov.com"
+  },
+  "license": "MIT",
+  "main": "index.js",
+  "bin": {
+    "bitcoin2mongodb": "./bin/bitcoin2mongodb"
+  },
+  "scripts": {
+    "start": "nodemon ./bin/bitcoin2mongodb",
+    "start:prod": "ENV=production NODE_ENV=production node ./bin/bitcoin2mongodb"
+  },
+  "dependencies": {
+    "@log4js-node/gelf": "^1.0.2",
+    "bignumber.js": "^9.0.0",
+    "bitcoind-rpc": "^0.8.1",
+    "bitcoinjs-lib": "^5.1.7",
+    "bluebird": "^3.7.2",
+    "convict": "^5.2.0",
+    "log4js": "^6.1.2",
+    "mongoose": "^5.9.6",
+    "zeromq": "^6.0.0-beta.6"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.3"
+  },
+  "homepage": "https://github.com/an-ivannikov-dev/bitcoin2mongodb-node#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/an-ivannikov-dev/bitcoin2mongodb-node.git"
+  },
+  "bugs": {
+    "url": "https://github.com/an-ivannikov-dev/bitcoin2mongodb-node/issues",
+    "email": "dev@an-ivannikov.com"
+  },
+  "keywords": [
+    "bitcoin",
+    "zmq",
+    "rpc",
+    "mongodb",
+    "node"
+  ],
+  "contributors": [
+    {
+      "name": "Aleksandr Ivannikov",
+      "email": "dev@an-ivannikov.com",
+      "url": "https://an-ivannikov.com"
+    }
+  ]
+}
