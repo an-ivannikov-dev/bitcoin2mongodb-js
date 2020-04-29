@@ -1,3 +1,376 @@
 #!/usr/bin/env node
 
-console.log("bitcoin2mongodb");
+global.GSTATE = {
+  symbol: { name: undefined, decimals: undefined, precision: undefined, },
+  info: {
+    network: {},
+    wallet: {},
+    blockchain: {},
+    txoutset: {},
+  },
+  db: {},
+};
+
+const assert = require('assert');
+const fs = require('fs');
+const cfg = require('../src/config');
+const { connectDB } = require('../src/mongodb');
+const log = require('../src/logger').getLogger('btc-watcher');
+const zmq = require('zeromq/v5-compat');
+const bitcoin = require('bitcoinjs-lib');
+const BN = require('bignumber.js');
+//const BTC = BN.clone({ DECIMAL_PLACES: 8 });
+//const SATOSHI = BN.clone({ DECIMAL_PLACES: 0 });
+
+const RpcClient = require('../src/lib/bitcoind-rpc/lib/v0.19.1');
+
+log.debug('Started');
+GSTATE.symbol = cfg.get('symbol');
+GSTATE.symbol.precision = Math.pow(10, GSTATE.symbol.decimals);
+
+const config = cfg.get('rpc');
+const rpc = new RpcClient(config);
+/*
+await GSTATE.db.model('BlockchainInfo').findOneAndUpdate({ tag: 'latest', chain: data.chain, }, data, { new: true, upsert: true, });
+*/
+
+
+const run = async function () {
+  console.log('go connectDB')
+  GSTATE.db = await connectDB();
+  console.log('go getInfo')
+  await getInfo();
+  GSTATE.getInfoIntervalID = setInterval(getInfo, 60 * 1000);
+  console.log('go runZeroMQ')
+  await runZeroMQ();
+
+  /*
+  rpc.createBatch()
+    .getBlockCount()
+    .getBlockchainInfo()
+    .getZmqNotifications()
+    .call((error, response) => console.log('Batch call 1:', error, response));
+
+  rpc.createBatch()
+    .getBlockCount()
+    .getBlockchainInfo()
+    .getZmqNotifications()
+    .call()
+    .then((response) => console.log('Batch call 2. response:', response))
+    //.then((response) => console.log('Batch call 2. response:', JSON.stringify(response, null, 2)))
+    .catch((error) => console.error('Batch call 2. error:', error));
+  */
+  /*
+  rpc.getBlockCount()
+    .then((count) => rpc.getBlockHash(count))
+    .then((hash) => rpc.getBlockHeader(hash))
+    .then((result) => console.log('Chained calls 1. last block header:', result))
+    .catch((error) => console.error('Chained calls 1. error:', error));
+*/
+  rpc.getBlockCount()
+    .then((count) => rpc.getBlockHash(count))
+    .then((hash) => rpc.getBlock(hash))
+    .then(async (block) => {
+      /*
+      let nB = GSTATE.db.model('Block')(block);
+      nB = await nB.save();
+      console.log(nB);
+      */
+
+      function batchCall() {
+        block.tx.forEach((txid) => {
+          const verbose = true;
+          const include_watchonly = false;
+
+          //rpc.getRawTransaction(txid, verbose, block.hash);
+
+          rpc.getTransaction(txid, include_watchonly, verbose);
+        });
+        rpc.getTransaction('f1f57fd0d78b29058de6061268fdff0e684982d06e31b5fa6b0f28d5271e28cc', false, true);
+      }
+      return rpc.batch(batchCall);
+    })
+    //.then((response) => console.log('chained calls 2. array:', response))
+    .then((response) => {
+      console.log('chained calls 2. array:', JSON.stringify(response, null, 2));
+      //fs.writeFileSync('result.json', JSON.stringify(response, null, 2))
+    })
+    .catch((error) => console.log('chained calls 2. error:', error));
+
+};
+run();
+
+
+/*
+// not_distributed
+rpc.getBlockCount((err, res) => {
+  if (err !== null)
+    return console.log('getBlockCount err:', JSON.stringify(err, null, 2));
+  console.log('getBlockCount res:', JSON.stringify(res, null, 2));
+});
+rpc.getZmqNotifications((err, res) => {
+  if (err !== null)
+    return console.log('getZmqNotifications err:', JSON.stringify(err, null, 2));
+  console.log('getZmqNotifications res:', JSON.stringify(res, null, 2));
+  for (let i in res.result) {
+    res.result[i].type;
+    res.result[i].address;
+    res.result[i].hwm;
+  }
+});
+
+*/
+
+async function runZeroMQ() {
+  console.log('runZeroMQ')
+
+  // Create a subscriber socket.
+  const sock = zmq.socket('sub');
+  const addr = "tcp://bitcoin_node:5555";
+  sock.connect(addr);
+
+  /* ZeroMQ
+  Subscribe to receive messages for a specific topic.
+  This can be "rawblock", "hashblock", "rawtx", or "hashtx".
+  "rawblock" - Receive raw block data for new blocks.
+  "hashblock" - Receive only the block hash for new blocks.
+  "rawtx" - Receive raw transaction data for new transactions.
+  "hashtx" - Receive only the transaction hash for new transactions.
+  */
+  sock.subscribe('hashblock');
+
+  sock.on('message', async (topic, message) => {
+    if (topic.toString() === 'hashblock') {
+      const blockId = message.toString('hex');
+      console.log('--- -- - - on  hashblock', blockId)
+
+      // Обнавляем статистику GSTATE.info
+      await getInfo();
+      // Получаем высоту и хэш последнего обработанного блока
+
+      // Сохраняем принятый блок
+      rpc.getBlock(blockId)
+        .then(async (blockData) => {
+          const block = await GSTATE.db.model('Block')(blockData).save();
+          //block.height
+          //{ previousblockhash: block.hash } // если количество блоков больше 1 значит цепочка ветвится и нужно подождать когда появится следующий блок (лучше 6 блоков);
+          block.tx.forEach(async (txid) => {
+            const verbose = true;
+            const include_watchonly = false;
+            try {
+              let tx = await rpc.getTransaction(txid, include_watchonly, verbose);
+              if (tx !== null) {
+                tx = normalizeTx(tx);
+                tx = await GSTATE.db.model('Transaction').findByIdAndUpdate(
+                  tx.txid, tx, { new: true, upsert: true, }
+                );
+              }
+            } catch (error) { console.error(error); }
+          });
+          return;
+        })
+        .catch((error) => console.error(error));
+
+    }
+
+    if (topic.toString() === 'rawblock') {
+      const rawBlock = message.toString('hex');
+    }
+
+
+    if (topic.toString() === 'hashtx') {
+      var id = message.toString('hex');
+      console.log('hashtx tx id', id)
+
+      rpc.getTransaction(id, function (err, resp) {
+        console.log(' rpc.getTransaction ->err', JSON.stringify(err, null, 2))
+        console.log(' rpc.getTransaction ->resp', JSON.stringify(resp, null, 2))
+        rpc.decodeRawTransaction(resp.result.hex, function (err, resp2) {
+          console.log(' rpc.decodeRawTransaction resp.result.hex ->resp', JSON.stringify(resp2, null, 2))
+          var tx = bitcoin.Transaction.fromHex(resp.result.hex);
+          console.log('tx', JSON.stringify(tx, null, 2))
+        })
+      });
+    }
+
+    if (topic.toString() === 'rawtx') {
+
+      // Message is a buffer. But we want it as a hex string.
+      var rawTx = message.toString('hex');
+
+      // Use bitcoinjs-lib to decode the raw transaction.
+      var tx = bitcoin.Transaction.fromHex(rawTx);
+
+      // Get the txid as a reference.
+      var txid = tx.getId();
+
+      // To go further you can get the address for a specific output as follows:
+      //const address = bitcoin.address.fromOutputScript(tx.outs[0].script, bitcoin.networks.testnet);
+
+      console.log('for address:', 'address', 'received transaction:', txid, tx);
+
+      rpc.decodeRawTransaction(rawTx, function (err, resp) {
+        console.log(' rpc.decodeRawTransaction ', JSON.stringify(resp, null, 2))
+      })
+
+      const tx_ = bitcoin.Transaction.fromHex(message)
+      console.log('tx_', tx_)
+      if (!tx_.isCoinbase()) {
+        //rpc.generate(1, console.log)
+        rpc.generatetoaddress(1, "n459wpRsQ5Vg7tPXNs4N55Ga8fkYgMjBKT", 10, log2)
+        console.log(topic, message)
+      }
+
+    }
+  });
+  return true;
+}
+
+
+async function getInfo() {
+  await getNetworkInfo();
+  await getWalletInfo();
+  await getBlockchainInfo();
+  await getTxOutSetInfo();
+}
+
+async function getNetworkInfo() {
+  try {
+    const res = await rpc.getNetworkInfo();
+    //btc->satoshi
+    res.relayfee = normalizeSatoshiToBtc(res.relayfee);
+    res.incrementalfee = normalizeSatoshiToBtc(res.incrementalfee);
+    GSTATE.info.network = res;
+    await GSTATE.db.model('NetworkInfo').findOneAndUpdate(
+      { tag: 'latest', },
+      GSTATE.info.network,
+      { new: true, upsert: true, }
+    );
+  } catch (error) { }
+  return GSTATE.info.network;
+}
+
+async function getWalletInfo() {
+  try {
+    const res = await rpc.getWalletInfo();
+    //btc->satoshi
+    res.balance = normalizeSatoshiToBtc(res.balance);
+    res.unconfirmed_balance = normalizeSatoshiToBtc(res.unconfirmed_balance);
+    res.immature_balance = normalizeSatoshiToBtc(res.immature_balance);
+    res.paytxfee = normalizeSatoshiToBtc(res.paytxfee);
+    GSTATE.info.wallet = res;
+    await GSTATE.db.model('WalletInfo').findOneAndUpdate(
+      { tag: 'latest', walletname: GSTATE.info.wallet.walletname },
+      GSTATE.info.wallet,
+      { new: true, upsert: true, }
+    );
+  } catch (error) { }
+  return GSTATE.info.wallet;
+}
+
+async function getBlockchainInfo() {
+  try {
+    const res = await rpc.getBlockchainInfo();
+    GSTATE.info.blockchain = res;
+    await GSTATE.db.model('BlockchainInfo').findOneAndUpdate(
+      { tag: 'latest', chain: GSTATE.info.blockchain.chain, },
+      GSTATE.info.blockchain,
+      { new: true, upsert: true, }
+    );
+  } catch (error) { }
+  return GSTATE.info.blockchain;
+}
+
+async function getTxOutSetInfo() {
+  try {
+    const res = await rpc.getTxOutSetInfo();
+    //btc->satoshi
+    res.total_amount = normalizeSatoshiToBtc(res.total_amount);
+    GSTATE.info.txoutset = res;
+    await GSTATE.db.model('TxOutSetInfo').findOneAndUpdate(
+      { tag: 'latest', },
+      GSTATE.info.txoutset, { new: true, upsert: true, }
+    );
+  } catch (error) { }
+  return GSTATE.info.txoutset;
+}
+
+
+
+function normalizeSatoshi(amount = 0) {
+  return Math.floor(amount);
+}
+function normalizeBTC(amount = 0.00000000, params = {
+  precision: GSTATE.symbol.precision, decimals: GSTATE.symbol.decimals || 8
+}) {
+  const precision = params.precision || Math.pow(10, params.decimals);
+  const btc = Math.floor(amount * precision) / precision;
+  return btc;
+}
+
+
+function normalizeSatoshiToBtc(amount = 0, params = {
+  precision: GSTATE.symbol.precision, decimals: GSTATE.symbol.decimals || 8
+}) {
+  const precision = params.precision || Math.pow(10, params.decimals);
+  // !!! Здесь важно округлить до ближайшего меньшего целого. (8.9 => 8)
+  return Math.floor(amount) / precision;
+}
+function normalizeBtcToSatoshi(amount = 0.00000000, params = {
+  precision: GSTATE.symbol.precision, decimals: GSTATE.symbol.decimals || 8
+}) {
+  const precision = params.precision || Math.pow(10, params.decimals);
+  return Math.floor(amount * precision);
+}
+
+assert.strictEqual(
+  normalizeSatoshiToBtc(52345678.901234567890), 0.52345678,
+  'normalizeSatoshiToBtc(52345678.901234567890) !== 0.52345678'
+);
+assert.strictEqual(
+  normalizeBtcToSatoshi(0.52345678901234567890), 52345678,
+  'normalizeBtcToSatoshi(0.52345678901234567890) !== 52345678'
+);
+
+
+function satoshiToBtcStr(amount = 0, params = {
+  precision: GSTATE.symbol.precision, decimals: GSTATE.symbol.decimals || 8
+}) {
+  const precision = params.precision || Math.pow(10, params.decimals);
+  const btc = Math.floor(amount) * precision;
+  return `${btc.toFixed(8)} BTC`;
+}
+function btcToBtcStr(amount = 0.00000000, params = {
+  precision: GSTATE.symbol.precision, decimals: GSTATE.symbol.decimals || 8
+}) {
+  const precision = params.precision || Math.pow(10, params.decimals);
+  const btc = Math.floor(amount * precision) / precision;
+  return `${btc.toFixed(8)} BTC`;
+}
+
+
+function normalizeTx(tx) {
+  tx.amount = normalizeBtcToSatoshi(tx.amount);
+  tx.fee = normalizeBtcToSatoshi(tx.fee);
+
+  // details
+  let details = [];
+  for (let i in tx.details) {
+    let obj = tx.details[i];
+    if (obj.amount) obj.amount = normalizeBtcToSatoshi(obj.amount);
+    if (obj.fee) obj.fee = normalizeBtcToSatoshi(obj.fee);
+    details.push(obj);
+  }
+  tx.details = details;
+
+  // decoded.vout
+  let vout = [];
+  for (let i in tx.decoded.vout) {
+    let obj = tx.decoded.vout[i];
+    if (obj.value) obj.value = normalizeBtcToSatoshi(obj.value);
+    vout.push(obj);
+  }
+  tx.decoded.vout = vout;
+
+  return tx;
+}
