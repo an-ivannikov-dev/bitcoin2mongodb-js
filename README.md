@@ -2,7 +2,7 @@
 **bitcoin2mongodb for [NodeJS]**
 
 **Mode**:
-- [];
+- [] full;
 - [].
 
 ## Launching
