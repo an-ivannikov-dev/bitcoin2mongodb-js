@@ -2,7 +2,7 @@
   "name": "bitcoin2mongodb-node",
   "version": "0.1.0",
   "private": true,
-  "description": "bitcoin2mongodb for node.js",
+  "description": "bitcoin2mongodb for NodeJS",
   "author": {
     "name": "Aleksandr Ivannikov",
     "email": "dev@an-ivannikov.com",
@@ -15,7 +15,8 @@
   },
   "scripts": {
     "start": "nodemon ./bin/bitcoin2mongodb",
-    "start:prod": "ENV=production NODE_ENV=production node ./bin/bitcoin2mongodb"
+    "start:prod": "ENV=production NODE_ENV=production node ./bin/bitcoin2mongodb",
+    "save-config-file": "node ./bin/bitcoin2mongodb --config-file-save"
   },
   "dependencies": {
     "@log4js-node/gelf": "^1.0.2",

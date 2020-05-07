@@ -1,4 +1,1 @@
-module.exports = () => {
-  console.log("bitcoin2mongodb");
-  return "bitcoin2mongodb";
-}
+module.exports = require('./src/app');

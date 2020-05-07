@@ -52,7 +52,7 @@ services:
       - "../bitcoin.conf:/data/bitcoin.conf"
 
   bitcoin2mongodb:
-    command: /app/bin/bitcoin2mongodb
+    command: bitcoin2mongodb
     depends_on:
       - mongodb
       - bitcoin_node
@@ -72,7 +72,9 @@ services:
       BITCOIN_RPC_PATHNAME: "/"
       BITCOIN_RPC_USER: "rpcuser"
       BITCOIN_RPC_PASSWORD: "rpcpassword"
-      BITCOIN_ZMQ_ADDRESS: "bitcoin_node:28332"
+      BITCOIN_ZMQ_HOST: "bitcoin_node"
+      BITCOIN_ZMQ_PORT: 28332
+      BITCOIN_ZMQ_SUBSCRIPTIONS: "hashblock"
       MONGODB_URI: "mongodb://mongodb:27017/BTC"
       MONGODB_DEBUG: "true"
       MONGODB_WIPE: "true"

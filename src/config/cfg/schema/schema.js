@@ -2,8 +2,8 @@ const env = require('./env');
 const data = require('./data');
 const config = require('./config');
 const logger = require('./logger');
+const bitcoin = require('./bitcoin');
 const mongodb = require('./mongodb');
-const rpc = require('./rpc');
 const symbol = require('./symbol');
 
 
@@ -12,10 +12,10 @@ const schema = Object.assign(
   {},
   { /* */ },
   env,
-  rpc,
   data,
   config,
   logger,
+  bitcoin,
   mongodb,
   symbol,
 );

@@ -9,7 +9,7 @@ ENV VERSION=${VERSION:-v0.1.0}
 LABEL name="ivannikovdev/bitcoin2mongodb" version="$VERSION" \
     description="bitcoin2mongodb" \
     maintainer="Aleksandr Ivannikov <dev@an-ivannikov.com>" \
-    url="https://github.com/an-ivannikov-dev/bitcoin2mongodb"
+    url="https://github.com/an-ivannikov-dev/bitcoin2mongodb-node"
 
 WORKDIR /app
 

@@ -9,7 +9,7 @@ const schema = {
     name: {
       doc: "logger.file.name",
       format: String,
-      default: "./debug.log",
+      default: "debug.log",
     },
     pattern: {
       doc: "logger.file.pattern",
